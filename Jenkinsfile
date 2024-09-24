@@ -1,31 +1,45 @@
+@Library('my-shared-library') _
+
 pipeline {
-    agent any
+    agent any 
     tools {
-        maven 'localMaven'
+        maven 'Maven'
     }
 
-    parameters {
-         string(name: 'tomcat_stag', defaultValue: '35.154.81.229', description: 'Tomcat Staging Server')
-    }
+    environment {
+        AWS_ACCESS_KEY_ID     = credentials('jenkins-aws-secret-key-id')
+        AWS_SECRET_ACCESS_KEY = credentials('jenkins-aws-secret-access-key')
+    }      
 
-stages{
-        stage('Build'){
+    stages {
+        stage('Build') {
             steps {
-                sh 'mvn clean package'
+                echo 'Building the application...'
+                sh 'mvn clean install' // Your build command
             }
-            post {
-                success {
-                    echo 'Archiving the artifacts'
-                    archiveArtifacts artifacts: '**/*.war'
-                }
+        }
+        
+        stage('Test') {
+            steps {
+                echo 'Running tests...'
+                sh 'mvn test' // Your test command
+            }
+        }
+        
+        stage('Publish') {
+            steps {
+                echo 'Packaging the application...'
+                sh 'mvn package'
             }
         }
 
-        stage ('Deployments'){
-                stage ('Deploy to Staging Server'){
-                    steps {
-                        sh "scp **/*.war jenkins@${params.tomcat_stag}:/usr/share/tomcat/webapps"
-                    }
+        stage('Upload to S3') {
+            steps {
+                awsUtils.uploadToS3('jenkinsucket01', './target/*.war')
+            }
+            post {
+                success {
+                    awsUtils.archiveArtifacts('target/*.war')
                 }
             }
         }
